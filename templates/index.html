@@ -2,100 +2,161 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>SysGaze Ultimate</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SysGaze Monitor</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    
     <style>
-        body { background-color: #000; color: #00ffcc; font-family: 'Consolas', monospace; overflow: hidden; padding-top: 20px;}
-        .progress { height: 12px; background-color: #222; margin-bottom: 2px; border-radius: 4px; }
-        .stat-label { color: #888; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; }
-        .stat-value { font-size: 2rem; font-weight: bold; line-height: 1.2; }
-        .stat-sub { font-size: 0.7rem; color: #666; margin-bottom: 10px; display: block;}
-        .card-dark { border-right: 1px solid #333; height: 100%; padding: 0 15px; }
-        .uptime-box { border: 1px solid #333; border-radius: 8px; padding: 10px; margin-top: 15px; background: #111; }
+        :root {
+            --neon-blue: #00f3ff;
+            --neon-green: #00ff9d;
+            --neon-red: #ff0055;
+            --neon-warn: #ffaa00;
+        }
+
+        body {
+            background-color: transparent; 
+            color: #fff;
+            font-family: 'Rajdhani', sans-serif;
+            overflow: hidden; 
+        }
+
+        .stat-card {
+            background: rgba(16, 28, 45, 0.6);
+            border: 1px solid rgba(0, 243, 255, 0.1);
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+            backdrop-filter: blur(5px);
+        }
+
+        .stat-value { font-size: 2.5rem; font-weight: bold; text-shadow: 0 0 10px rgba(255,255,255,0.1); }
+        .stat-label { color: #64748b; font-size: 0.8rem; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 10px; }
+
+        /* Progress Bars */
+        .progress { height: 8px; background: #1e293b; overflow: visible; margin-top: 10px; }
+        .progress-bar { position: relative; overflow: visible; transition: width 0.6s ease; box-shadow: 0 0 10px currentColor; }
         
-        /* Style Khusus Disk List */
-        .disk-item { margin-bottom: 8px; border-bottom: 1px solid #111; padding-bottom: 5px; }
-        .disk-name { font-size: 0.9rem; font-weight: bold; color: #fff; }
-        .disk-info { font-size: 0.7rem; float: right; color: #888; }
+        /* Storage Grid */
+        .disk-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-top: 5px; }
+        .disk-item { background: rgba(0,0,0,0.3); padding: 10px; border-radius: 5px; border: 1px solid #334155; }
+        .disk-name { color: var(--neon-blue); font-weight: bold; }
+        .disk-free { font-size: 0.7rem; color: #94a3b8; }
+
+        /* Uptime Badge */
+        .uptime-badge { 
+            background: rgba(0, 255, 157, 0.1); 
+            border: 1px solid var(--neon-green); 
+            color: var(--neon-green);
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-family: monospace;
+            display: inline-block;
+            margin-top: 15px;
+        }
     </style>
 </head>
 <body>
-    <div class="container-fluid">
-        <div class="row text-center">
-            
-            <div class="col-4 card-dark">
-                <div class="stat-label">CPU Load</div>
-                <div class="stat-value text-warning" id="cpu_val">0%</div>
-                <div class="progress mt-2" style="height: 15px;">
-                    <div id="cpu_bar" class="progress-bar bg-warning" style="width: 0%"></div>
+
+    <div class="container-fluid pt-2">
+        <div class="row g-3">
+            <div class="col-4">
+                <div class="stat-card h-100">
+                    <div class="stat-label">CPU Load</div>
+                    <div class="stat-value" id="cpuVal" style="color: var(--neon-warn)">0%</div>
+                    <div class="progress">
+                        <div id="cpuBar" class="progress-bar bg-warning" style="width: 0%"></div>
+                    </div>
                 </div>
             </div>
 
-            <div class="col-4 card-dark">
-                <div class="stat-label">RAM Usage</div>
-                <div class="stat-value text-info" id="ram_val">0%</div>
-                <div class="progress mt-2" style="height: 15px;">
-                    <div id="ram_bar" class="progress-bar bg-info" style="width: 0%"></div>
-                </div>
-                <div class="stat-sub" id="ram_text">--/-- GB</div>
-            </div>
-
-            <div class="col-4" style="text-align: left;">
-                <div class="stat-label text-center mb-2">Storage Pools</div>
-                <div id="disk_container">
-                    <small class="text-muted">Scanning Drives...</small>
+            <div class="col-4">
+                <div class="stat-card h-100">
+                    <div class="stat-label">RAM Usage</div>
+                    <div class="stat-value" id="ramVal" style="color: var(--neon-blue)">0%</div>
+                    <div class="progress">
+                        <div id="ramBar" class="progress-bar bg-info" style="width: 0%"></div>
+                    </div>
+                    <small class="text-muted d-block mt-2" id="ramText">--/-- GB</small>
                 </div>
             </div>
 
+            <div class="col-4">
+                <div class="stat-card h-100 text-start">
+                    <div class="stat-label mb-2">Storage Pools</div>
+                    <div id="diskContainer" class="disk-grid">
+                        <div class="text-muted small text-center w-100">Connecting to SysGaze...</div>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <div class="row justify-content-center">
-            <div class="col-6">
-                <div class="uptime-box text-center">
-                    <span class="text-muted small">SYSTEM UPTIME:</span> 
-                    <span class="fw-bold text-white ms-2" id="uptime_val">-- Hours</span>
-                </div>
+        <div class="text-center">
+            <div class="uptime-badge">
+                SYSTEM UPTIME: <span id="uptimeVal">-- Hours</span>
             </div>
         </div>
     </div>
 
     <script>
-        var socket = io();
-        
-        socket.on('update_stats', function(data) {
-            // Update CPU & RAM
-            document.getElementById('cpu_val').innerText = data.cpu + '%';
-            document.getElementById('cpu_bar').style.width = data.cpu + '%';
-            document.getElementById('ram_val').innerText = data.ram_percent + '%';
-            document.getElementById('ram_bar').style.width = data.ram_percent + '%';
-            document.getElementById('ram_text').innerText = data.ram_text;
-            document.getElementById('uptime_val').innerText = data.uptime;
+        // --- BAGIAN PENTING: KONEKSI PAKSA KE 127.0.0.1 ---
+        const socket = io('http://127.0.0.1:5001', {
+            transports: ['websocket', 'polling'], // Coba Websocket, kalau gagal pake Polling
+            reconnection: true,
+            reconnectionAttempts: 10
+        });
 
-            // --- UPDATE MULTI-DISK LOOP ---
-            var diskHTML = "";
-            if (data.disks && data.disks.length > 0) {
-                data.disks.forEach(function(d) {
-                    // Warna merah kalau > 90%
-                    var colorClass = d.percent > 90 ? 'bg-danger' : 'bg-success';
-                    var textColor = d.percent > 90 ? 'text-danger' : 'text-white';
+        socket.on('connect', () => {
+            console.log("✅ HTML BERHASIL KONEK KE SYSGAZE!");
+        });
 
-                    diskHTML += `
+        socket.on('connect_error', (err) => {
+            console.log("❌ GAGAL KONEK:", err);
+            document.getElementById('uptimeVal').innerText = "OFFLINE";
+            document.getElementById('diskContainer').innerHTML = '<div class="text-danger small text-center">Connection Lost</div>';
+        });
+
+        socket.on('update_stats', (data) => {
+            // 1. Update CPU
+            document.getElementById('cpuVal').innerText = data.cpu + '%';
+            document.getElementById('cpuBar').style.width = data.cpu + '%';
+            
+            // Warna CPU Dynamic
+            let cpuColor = data.cpu < 50 ? '#00ff9d' : (data.cpu < 80 ? '#ffaa00' : '#ff0055');
+            document.getElementById('cpuVal').style.color = cpuColor;
+            document.getElementById('cpuBar').style.backgroundColor = cpuColor;
+            document.getElementById('cpuBar').style.boxShadow = `0 0 10px ${cpuColor}`;
+
+            // 2. Update RAM
+            document.getElementById('ramVal').innerText = data.ram_percent + '%';
+            document.getElementById('ramBar').style.width = data.ram_percent + '%';
+            document.getElementById('ramText').innerText = data.ram_text;
+
+            // 3. Update Uptime
+            document.getElementById('uptimeVal').innerText = data.uptime;
+
+            // 4. Update Disks
+            const container = document.getElementById('diskContainer');
+            container.innerHTML = ''; // Reset biar gak numpuk
+            
+            data.disks.forEach(d => {
+                let barColor = d.percent > 90 ? 'bg-danger' : 'bg-success';
+                let html = `
                     <div class="disk-item">
-                        <div class="d-flex justify-content-between">
-                            <span class="disk-name ${textColor}">${d.letter}</span>
-                            <span class="disk-info">${d.percent}% Used (${d.free})</span>
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="disk-name"><i class="bi bi-hdd"></i> ${d.letter}</span>
+                            <span class="small text-white">${d.percent}%</span>
                         </div>
-                        <div class="progress">
-                            <div class="progress-bar ${colorClass}" style="width: ${d.percent}%"></div>
+                        <div class="progress" style="height: 4px; background: #333;">
+                            <div class="progress-bar ${barColor}" style="width: ${d.percent}%"></div>
                         </div>
+                        <div class="disk-free mt-1 text-end">${d.free}</div>
                     </div>
-                    `;
-                });
-            } else {
-                diskHTML = '<div class="text-center text-muted small">No disk data</div>';
-            }
-            document.getElementById('disk_container').innerHTML = diskHTML;
+                `;
+                container.innerHTML += html;
+            });
         });
     </script>
 </body>

@@ -6,9 +6,10 @@ import signal
 
 # --- KONFIGURASI ---
 scripts = [
-    {"name": "NetWatch Security", "file": "netwatch.py", "port": 5000},
-    {"name": "SysGaze Monitor",   "file": "sysgaze.py",  "port": 5001},
-    {"name": "The Cleaner",       "file": "cleaner.py",  "port": None}
+    {"name": "NetWatch Security", "file": "netwatch.py",  "port": 5000},
+    {"name": "SysGaze Monitor",   "file": "sysgaze.py",   "port": 5001},
+    {"name": "IT-Ops Commander",  "file": "commander.py", "port": None},
+    {"name": "The Cleaner",       "file": "cleaner.py",   "port": None}
 ]
 
 processes = []
