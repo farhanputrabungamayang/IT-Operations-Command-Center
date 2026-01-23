@@ -1,18 +1,31 @@
+import os
+import socket
 import threading
 import time
-import socket
-import speedtest
-import requests
 from datetime import datetime
+
+# --- THIRD-PARTY IMPORTS ---
+import requests
+import speedtest
+from dotenv import load_dotenv
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_socketio import SocketIO
 from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
-from werkzeug.security import generate_password_hash, check_password_hash
 from ping3 import ping
+from werkzeug.security import generate_password_hash, check_password_hash
+
+# Load Environment Variables (.env)
+load_dotenv()
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'netwatch-secret-key-super-aman'
+
+# --- KONFIGURASI ---
+# Mengambil variabel aman dari file .env
+TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
+TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'default-dev-key') # Fallback key jika .env gagal
+
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///netwatch.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
@@ -20,12 +33,8 @@ db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
-# Gunakan 'threading' agar kompatibel dengan kode lama Masbro (tanpa eventlet)
+# Gunakan 'threading' agar kompatibel dengan Windows & kode lama
 socketio = SocketIO(app, cors_allowed_origins='*', async_mode='threading')
-
-# --- KONFIGURASI TELEGRAM ---
-TELEGRAM_TOKEN = '8407012299:AAH9qpAltsHIL266W3EQqqMXTsfB4XOPulY'
-TELEGRAM_CHAT_ID = '902599285'
 
 # --- DATABASE MODELS ---
 class User(UserMixin, db.Model):
@@ -83,7 +92,7 @@ def check_port_open(ip, port):
 def index():
     # Mengambil semua device dari Database
     devices = Device.query.all()
-    # Render file HTML Ultimate (pastikan nama file HTML-nya benar)
+    # Render file HTML Ultimate
     return render_template('dashboard_ultimate.html', targets=devices, speed=latest_speed)
 
 @app.route('/login', methods=['GET', 'POST'])

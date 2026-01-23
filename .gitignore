@@ -1,0 +1,29 @@
+# --- RAHASIA NEGARA (Wajib!) ---
+.env
+.env.local
+
+# --- Python Cache (Sampah Mesin) ---
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- Virtual Environment ---
+venv/
+env/
+.venv/
+
+# --- Database (Biar Data Gak Ilang/Bocor) ---
+*.db
+*.sqlite3
+instance/
+
+# --- IDE / Text Editor Settings ---
+.vscode/
+.idea/
+
+# --- OS Junk (Sampah Windows/Mac) ---
+.DS_Store
+Thumbs.db
+
+# --- Log Files ---
+*.log
