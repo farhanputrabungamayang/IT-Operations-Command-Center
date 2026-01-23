@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>NETWATCH // COMMAND CENTER</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> 
+    
+    <style>
+        :root {
+            --neon-blue: #00f3ff;
+            --neon-green: #00ff9d;
+            --neon-red: #ff0055;
+            --dark-bg: #050a14;
+            --card-bg: rgba(16, 28, 45, 0.7);
+        }
+
+        body { 
+            background-color: var(--dark-bg); 
+            color: #e2e8f0; 
+            font-family: 'Rajdhani', sans-serif; 
+            background-image: radial-gradient(circle at 50% 0%, #1e3a8a 0%, var(--dark-bg) 50%);
+            min-height: 100vh;
+        }
+
+        /* HEADER */
+        .header-bar { 
+            border-bottom: 1px solid rgba(0, 243, 255, 0.2); 
+            padding: 20px 0; 
+            margin-bottom: 30px; 
+            background: linear-gradient(90deg, transparent, rgba(0, 243, 255, 0.05), transparent);
+        }
+        .app-title { font-family: 'Orbitron', sans-serif; letter-spacing: 2px; color: #fff; text-transform: uppercase; }
+        
+        /* CARDS */
+        .card-monitor { 
+            background-color: var(--card-bg); 
+            border: 1px solid rgba(255, 255, 255, 0.1); 
+            border-left: 3px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px; 
+            transition: all 0.3s; 
+            backdrop-filter: blur(10px);
+            position: relative; 
+            overflow: hidden;
+        }
+        .card-monitor:hover { 
+            transform: translateY(-5px); 
+            box-shadow: 0 0 20px rgba(0, 243, 255, 0.2); 
+            border-color: var(--neon-blue);
+            border-left-color: var(--neon-blue);
+        }
+        
+        /* STATUS DOTS */
+        .status-dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; margin-right: 8px; box-shadow: 0 0 5px currentColor; }
+        .bg-success { background-color: var(--neon-green) !important; color: var(--neon-green); }
+        .bg-danger { background-color: var(--neon-red) !important; color: var(--neon-red); animation: pulseRed 1s infinite; }
+        .bg-warning { background-color: #ffaa00 !important; color: #ffaa00; }
+        .bg-secondary { background-color: #64748b !important; color: #64748b; }
+        @keyframes pulseRed { 0% { opacity: 1; box-shadow: 0 0 0 0 rgba(255, 0, 85, 0.7); } 70% { opacity: 1; box-shadow: 0 0 10px 10px rgba(255, 0, 85, 0); } 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(255, 0, 85, 0); } }
+
+        /* SPEEDTEST CARD */
+        .card-speed { 
+            background: linear-gradient(135deg, rgba(0, 243, 255, 0.1) 0%, rgba(0, 85, 255, 0.1) 100%); 
+            border: 1px solid var(--neon-blue); 
+            color: var(--neon-blue); 
+            border-radius: 12px; 
+            position: relative;
+        }
+        .card-speed h3 { font-family: 'Orbitron', sans-serif; text-shadow: 0 0 10px var(--neon-blue); color: #fff; }
+
+        /* BUTTONS */
+        .btn-custom { border: 1px solid var(--neon-blue); color: var(--neon-blue); background: transparent; font-family: 'Orbitron', sans-serif; font-size: 0.8rem; }
+        .btn-custom:hover { background: var(--neon-blue); color: #000; box-shadow: 0 0 15px var(--neon-blue); }
+        .btn-logout { border: 1px solid var(--neon-red); color: var(--neon-red); }
+        .btn-logout:hover { background: var(--neon-red); color: #fff; box-shadow: 0 0 15px var(--neon-red); }
+        .btn-del { position: absolute; top: 10px; right: 10px; color: #475569; z-index: 10; font-size: 1.2rem; transition: 0.3s; }
+        .btn-del:hover { color: var(--neon-red); text-shadow: 0 0 10px var(--neon-red); }
+
+        /* IFRAME SYSGAZE */
+        .sysgaze-wrapper {
+            border: 1px solid #334155;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #000;
+            box-shadow: inset 0 0 20px #000;
+        }
+        .sysgaze-frame { width: 100%; height: 400px; border: none; }
+        
+        .section-title { color: #64748b; font-size: 0.9rem; letter-spacing: 2px; margin-bottom: 15px; border-left: 3px solid var(--neon-blue); padding-left: 10px; text-transform: uppercase; }
+    </style>
+</head>
+<body>
+
+<div class="container pb-5">
+    <div class="d-flex justify-content-between align-items-center header-bar">
+        <div>
+            <h3 class="app-title m-0"><i class="bi bi-cpu-fill" style="color: var(--neon-blue);"></i> NETWATCH <span style="color: var(--neon-blue);">//</span> PRIME</h3>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-dark border border-secondary text-secondary me-2 p-2 font-monospace">OP: {{ current_user.username }}</span>
+            <button class="btn btn-sm btn-custom rounded-pill px-3" onclick="toggleMute()" id="muteBtn"><i class="bi bi-volume-up-fill"></i> SOUND</button>
+            <button class="btn btn-sm btn-custom rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#addModal"><i class="bi bi-plus-lg"></i> ADD TARGET</button>
+            <a href="/logout" class="btn btn-sm btn-logout rounded-circle" style="width: 32px; height: 32px; padding: 4px;" title="Disconnect"><i class="bi bi-power"></i></a>
+        </div>
+    </div>
+
+    <div class="row mb-5">
+        <div class="col-12">
+            <div class="section-title">External Connectivity</div>
+            <div class="card card-speed shadow p-4">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                    <div class="d-flex align-items-center gap-4">
+                        <i class="bi bi-globe2 fs-1"></i>
+                        <div><h5 class="mb-0 fw-bold text-white">INTERNET UPLINK</h5><small class="opacity-75 font-monospace">AUTO-REFRESH: 15m</small></div>
+                    </div>
+                    <div class="d-flex gap-5 text-center">
+                        <div><h3 class="mb-0" id="speedDL">{{ speed.dl }}</h3><small class="text-white opacity-50">DOWNLOAD (Mbps)</small></div>
+                        <div><h3 class="mb-0" id="speedUL">{{ speed.ul }}</h3><small class="text-white opacity-50">UPLOAD (Mbps)</small></div>
+                        <div><h3 class="mb-0" id="speedPing">{{ speed.ping }}</h3><small class="text-white opacity-50">LATENCY (ms)</small></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section-title">Target Status Monitoring</div>
+    <div class="row g-4 mb-5" id="monitorGrid">
+        {% for t in targets %}
+        <div class="col-md-4 col-lg-3">
+            <div class="card card-monitor h-100 p-3" id="card_{{ t.id }}" onclick="showChart('{{ t.id }}', '{{ t.name }}')">
+                <a href="/delete_device/{{ t.id }}" class="btn-del" onclick="event.stopPropagation(); return confirm('Terminate Target?')"><i class="bi bi-trash3"></i></a>
+                
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <i class="bi {{ t.icon }} fs-1 text-secondary" id="icon_{{ t.id }}"></i>
+                    <span class="badge bg-secondary font-monospace" id="badge_{{ t.id }}">SCANNING...</span>
+                </div>
+                
+                <h5 class="fw-bold mb-1 text-white font-monospace">{{ t.name }}</h5>
+                <small class="text-muted d-block mb-3 font-monospace" style="letter-spacing: 1px;">{{ t.ip }} {% if t.port > 0 %}:{{ t.port }}{% endif %}</small>
+                
+                <div class="d-flex align-items-center justify-content-between mt-auto pt-3 border-top border-dark">
+                    <div><span class="status-dot bg-secondary" id="dot_{{ t.id }}"></span><span class="fw-bold" id="status_{{ t.id }}">--</span></div>
+                    <span class="small font-monospace" id="lat_{{ t.id }}">--</span>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="section-title">Local Hardware Telemetry (SysGaze)</div>
+            <div class="sysgaze-wrapper">
+                <iframe src="http://127.0.0.1:5001" class="sysgaze-frame" title="SysGaze Monitor"></iframe>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="chartModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content bg-dark border border-secondary text-white" style="box-shadow: 0 0 30px rgba(0,0,0,0.8);">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title fw-bold font-monospace" id="chartTitle">LATENCY HISTORY</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div style="height: 300px;"><canvas id="pingChart"></canvas></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="addModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content bg-dark border border-secondary text-white" action="/add_device" method="POST">
+            <div class="modal-header border-secondary"><h5 class="modal-title fw-bold font-monospace">ADD NEW TARGET</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <div class="mb-3"><label class="small text-muted">TARGET NAME</label><input type="text" name="name" class="form-control bg-black text-white border-secondary" required></div>
+                <div class="mb-3"><label class="small text-muted">IP ADDRESS / HOST</label><input type="text" name="ip" class="form-control bg-black text-white border-secondary" required></div>
+                <div class="mb-3"><label class="small text-muted">PORT (0 FOR ICMP PING)</label><input type="number" name="port" class="form-control bg-black text-white border-secondary" value="0"></div>
+                <div class="mb-3"><label class="small text-muted">DEVICE TYPE</label><select name="icon" class="form-select bg-black text-white border-secondary"><option value="bi-hdd-network">SERVER</option><option value="bi-router">ROUTER</option><option value="bi-globe">INTERNET</option><option value="bi-camera-video">CCTV</option></select></div>
+            </div>
+            <div class="modal-footer border-secondary"><button type="submit" class="btn btn-custom w-100">INITIALIZE MONITORING</button></div>
+        </form>
+    </div>
+</div>
+
+<script>
+    var socket = io();
+    const alarmSound = new Audio('https://actions.google.com/sounds/v1/alarms/spaceship_alarm.ogg'); alarmSound.loop = true;
+    let isMuted = false; let isPlaying = false;
+    let myChart = null;
+
+    function toggleMute() {
+        isMuted = !isMuted;
+        const btn = document.getElementById('muteBtn');
+        if (isMuted) { btn.innerHTML = '<i class="bi bi-volume-mute-fill"></i> MUTED'; btn.style.borderColor = '#64748b'; btn.style.color = '#64748b'; if(isPlaying) alarmSound.pause(); } 
+        else { btn.innerHTML = '<i class="bi bi-volume-up-fill"></i> SOUND'; btn.style.borderColor = 'var(--neon-blue)'; btn.style.color = 'var(--neon-blue)'; }
+    }
+
+    function showChart(id, name) {
+        document.getElementById('chartTitle').innerText = 'TELEMETRY: ' + name.toUpperCase();
+        var myModal = new bootstrap.Modal(document.getElementById('chartModal'));
+        myModal.show();
+        fetch('/api/chart/' + id).then(r => r.json()).then(data => {
+            const ctx = document.getElementById('pingChart');
+            if (myChart) myChart.destroy();
+            myChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.labels,
+                    datasets: [{
+                        label: 'Latency (ms)',
+                        data: data.values,
+                        borderColor: '#00ff9d',
+                        backgroundColor: 'rgba(0, 255, 157, 0.1)',
+                        borderWidth: 2,
+                        pointBackgroundColor: '#00ff9d',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: { y: { beginAtZero: true, grid: { color: '#334155' } }, x: { grid: { display: false } } },
+                    plugins: { legend: { display: false } }
+                }
+            });
+        });
+    }
+
+    socket.on('update_speed', d => {
+        document.getElementById('speedDL').innerText = d.dl;
+        document.getElementById('speedUL').innerText = d.ul;
+        document.getElementById('speedPing').innerText = d.ping;
+    });
+
+    socket.on('update_monitor', d => {
+        let anyDown = false;
+        d.forEach(i => {
+            var el = document.getElementById('card_' + i.id);
+            if(el){
+                // Update Badge Color Logic
+                let badgeClass = i.status === 'UP' ? 'bg-success' : (i.status === 'WAITING' ? 'bg-secondary' : 'bg-danger');
+                
+                document.getElementById('dot_'+i.id).className = 'status-dot '+badgeClass;
+                document.getElementById('badge_'+i.id).className = 'badge font-monospace '+badgeClass;
+                
+                document.getElementById('icon_'+i.id).className = 'bi '+document.getElementById('icon_'+i.id).classList[1]+' fs-1 '+ (i.status==='UP' ? 'text-white' : 'text-danger');
+                
+                document.getElementById('status_'+i.id).innerText = i.status;
+                document.getElementById('badge_'+i.id).innerText = i.status;
+                document.getElementById('lat_'+i.id).innerText = i.latency;
+                
+                // Add glowing border if UP
+                if(i.status === 'UP') el.style.borderColor = 'var(--neon-green)';
+                else if(i.status === 'DOWN') el.style.borderColor = 'var(--neon-red)';
+                
+                if(i.status=='DOWN' || i.status=='ERR') anyDown = true;
+            }
+        });
+        if(anyDown && !isMuted && !isPlaying) { alarmSound.play().catch(()=>{}); isPlaying=true; }
+        else if(!anyDown && isPlaying) { alarmSound.pause(); isPlaying=false; }
+    });
+</script>
+</body>
+</html>

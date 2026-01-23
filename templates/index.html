@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SysGaze Ultimate</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        body { background-color: #000; color: #00ffcc; font-family: 'Consolas', monospace; overflow: hidden; padding-top: 20px;}
+        .progress { height: 12px; background-color: #222; margin-bottom: 2px; border-radius: 4px; }
+        .stat-label { color: #888; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; }
+        .stat-value { font-size: 2rem; font-weight: bold; line-height: 1.2; }
+        .stat-sub { font-size: 0.7rem; color: #666; margin-bottom: 10px; display: block;}
+        .card-dark { border-right: 1px solid #333; height: 100%; padding: 0 15px; }
+        .uptime-box { border: 1px solid #333; border-radius: 8px; padding: 10px; margin-top: 15px; background: #111; }
+        
+        /* Style Khusus Disk List */
+        .disk-item { margin-bottom: 8px; border-bottom: 1px solid #111; padding-bottom: 5px; }
+        .disk-name { font-size: 0.9rem; font-weight: bold; color: #fff; }
+        .disk-info { font-size: 0.7rem; float: right; color: #888; }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row text-center">
+            
+            <div class="col-4 card-dark">
+                <div class="stat-label">CPU Load</div>
+                <div class="stat-value text-warning" id="cpu_val">0%</div>
+                <div class="progress mt-2" style="height: 15px;">
+                    <div id="cpu_bar" class="progress-bar bg-warning" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div class="col-4 card-dark">
+                <div class="stat-label">RAM Usage</div>
+                <div class="stat-value text-info" id="ram_val">0%</div>
+                <div class="progress mt-2" style="height: 15px;">
+                    <div id="ram_bar" class="progress-bar bg-info" style="width: 0%"></div>
+                </div>
+                <div class="stat-sub" id="ram_text">--/-- GB</div>
+            </div>
+
+            <div class="col-4" style="text-align: left;">
+                <div class="stat-label text-center mb-2">Storage Pools</div>
+                <div id="disk_container">
+                    <small class="text-muted">Scanning Drives...</small>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="row justify-content-center">
+            <div class="col-6">
+                <div class="uptime-box text-center">
+                    <span class="text-muted small">SYSTEM UPTIME:</span> 
+                    <span class="fw-bold text-white ms-2" id="uptime_val">-- Hours</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        var socket = io();
+        
+        socket.on('update_stats', function(data) {
+            // Update CPU & RAM
+            document.getElementById('cpu_val').innerText = data.cpu + '%';
+            document.getElementById('cpu_bar').style.width = data.cpu + '%';
+            document.getElementById('ram_val').innerText = data.ram_percent + '%';
+            document.getElementById('ram_bar').style.width = data.ram_percent + '%';
+            document.getElementById('ram_text').innerText = data.ram_text;
+            document.getElementById('uptime_val').innerText = data.uptime;
+
+            // --- UPDATE MULTI-DISK LOOP ---
+            var diskHTML = "";
+            if (data.disks && data.disks.length > 0) {
+                data.disks.forEach(function(d) {
+                    // Warna merah kalau > 90%
+                    var colorClass = d.percent > 90 ? 'bg-danger' : 'bg-success';
+                    var textColor = d.percent > 90 ? 'text-danger' : 'text-white';
+
+                    diskHTML += `
+                    <div class="disk-item">
+                        <div class="d-flex justify-content-between">
+                            <span class="disk-name ${textColor}">${d.letter}</span>
+                            <span class="disk-info">${d.percent}% Used (${d.free})</span>
+                        </div>
+                        <div class="progress">
+                            <div class="progress-bar ${colorClass}" style="width: ${d.percent}%"></div>
+                        </div>
+                    </div>
+                    `;
+                });
+            } else {
+                diskHTML = '<div class="text-center text-muted small">No disk data</div>';
+            }
+            document.getElementById('disk_container').innerHTML = diskHTML;
+        });
+    </script>
+</body>
+</html>
