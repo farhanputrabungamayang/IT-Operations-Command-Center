@@ -56,7 +56,8 @@
 
 ## 📸 Screenshots
 
-*(Tempatkan screenshot dashboard keren Masbro di sini nanti)*
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/aac4c7e5-ea20-4336-8684-95e1822cc0cf" />
+
 
 ---
 
