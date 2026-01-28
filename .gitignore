@@ -15,3 +15,7 @@ storage/temp_images/
 # --- LAINNYA ---
 .DS_Store
 .vscode/
+
+# --- DATABASE & BINARY ---
+*.db
+*.exe
