@@ -1,29 +1,17 @@
-# --- RAHASIA NEGARA (Wajib!) ---
+# --- RAHASIA NEGARA (JANGAN DIHAPUS) ---
 .env
-.env.local
 
-# --- Python Cache (Sampah Mesin) ---
+# --- SAMPAH PYTHON ---
 __pycache__/
-*.py[cod]
-*$py.class
+*.pyc
 
-# --- Virtual Environment ---
-venv/
-env/
-.venv/
+# --- FOLDER PENYIMPANAN (BIAR GAK BERAT) ---
+storage/screenshots/
+storage/webcam/
+storage/videos/
+storage/reports/
+storage/temp_images/
 
-# --- Database (Biar Data Gak Ilang/Bocor) ---
-*.db
-*.sqlite3
-instance/
-
-# --- IDE / Text Editor Settings ---
-.vscode/
-.idea/
-
-# --- OS Junk (Sampah Windows/Mac) ---
+# --- LAINNYA ---
 .DS_Store
-Thumbs.db
-
-# --- Log Files ---
-*.log
+.vscode/

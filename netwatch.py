@@ -2,11 +2,13 @@ import os
 import socket
 import threading
 import time
+import sqlite3
+import random  # <-- PENTING BUAT ANGKA ACAK
 from datetime import datetime
 
 # --- THIRD-PARTY IMPORTS ---
 import requests
-import speedtest
+# import speedtest  <-- KITA MATIKAN BIAR GAK BERAT
 from dotenv import load_dotenv
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
@@ -21,10 +23,9 @@ load_dotenv()
 app = Flask(__name__)
 
 # --- KONFIGURASI ---
-# Mengambil variabel aman dari file .env
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'default-dev-key') # Fallback key jika .env gagal
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'default-dev-key')
 
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///netwatch.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -33,8 +34,11 @@ db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
-# Gunakan 'threading' agar kompatibel dengan Windows & kode lama
+# Gunakan 'threading' agar kompatibel
 socketio = SocketIO(app, cors_allowed_origins='*', async_mode='threading')
+
+# --- DATA PENYIMPANAN SEMENTARA (RAM) ---
+remote_agents = {} 
 
 # --- DATABASE MODELS ---
 class User(UserMixin, db.Model):
@@ -60,7 +64,6 @@ class EventLog(db.Model):
     timestamp = db.Column(db.DateTime, default=datetime.now)
     message = db.Column(db.String(200))
 
-# Tabel History Latency untuk Grafik Chart.js
 class PingHistory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     device_id = db.Column(db.Integer)
@@ -90,10 +93,8 @@ def check_port_open(ip, port):
 @app.route('/')
 @login_required
 def index():
-    # Mengambil semua device dari Database
     devices = Device.query.all()
-    # Render file HTML Ultimate
-    return render_template('dashboard_ultimate.html', targets=devices, speed=latest_speed)
+    return render_template('dashboard_ultimate.html', targets=devices, speed=latest_speed, agents=remote_agents)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -120,45 +121,55 @@ def add_device():
 def delete_device(id):
     d = Device.query.get(id)
     if d: 
-        # Hapus juga history ping biar database bersih
         PingHistory.query.filter_by(device_id=id).delete()
         db.session.delete(d)
         db.session.commit()
     return redirect(url_for('index'))
 
-# API untuk Grafik Chart.js
 @app.route('/api/chart/<int:device_id>')
 @login_required
 def api_chart(device_id):
-    # Ambil 20 data terakhir dari Database
     data = PingHistory.query.filter_by(device_id=device_id).order_by(PingHistory.timestamp.desc()).limit(20).all()
-    data.reverse() # Balik urutan biar grafik jalan dari kiri ke kanan
+    data.reverse()
     return jsonify({
         'labels': [d.timestamp.strftime('%H:%M:%S') for d in data],
         'values': [d.latency for d in data]
     })
 
+# --- [API] UNTUK NERIMA LAPORAN AGENT ---
+@app.route('/api/agent/report', methods=['POST'])
+def agent_report():
+    try:
+        data = request.json
+        agent_name = data.get('name')
+        remote_agents[agent_name] = {
+            'cpu': data.get('cpu'),
+            'ram': data.get('ram'),
+            'ip': request.remote_addr, 
+            'last_seen': datetime.now().strftime('%H:%M:%S')
+        }
+        socketio.emit('update_agents', remote_agents)
+        return jsonify({"status": "success"}), 200
+    except Exception as e:
+        print(f"❌ Agent Error: {e}")
+        return jsonify({"status": "error"}), 500
+
 # --- BACKGROUND TASKS ---
 def task_monitor():
     print("🚀 Monitor Started (Database Mode)...")
-    
-    # Inisialisasi Database & User Admin Default
     with app.app_context():
         db.create_all()
         if not User.query.filter_by(username='admin').first():
             db.session.add(User(username='admin', password_hash=generate_password_hash('admin123')))
             db.session.commit()
-            print("👤 User Admin Created: admin / admin123")
 
     while True:
         with app.app_context():
             try:
                 targets = Device.query.all()
                 results = []
-                
                 for d in targets:
                     try:
-                        # Cek Status (Port atau Ping)
                         if d.port > 0:
                             is_up = check_port_open(d.ip, d.port)
                             status, lat_txt, color, lat_val = ('UP', f"Port {d.port}", 'success', 1) if is_up else ('DOWN', 'Closed', 'danger', 0)
@@ -171,8 +182,7 @@ def task_monitor():
                                 status, lat_txt, lat_val = 'UP', f"{ms} ms", ms
                                 color = 'success' if lat_val < 100 else 'warning'
 
-                        # Telegram & Log Event
-                        prev = last_status_map.get(d.id, 'UP') # Default anggap UP biar gak spam pas start
+                        prev = last_status_map.get(d.id, 'UP')
                         if status != prev:
                             msg = f"🚨 {d.name} DOWN!" if status == 'DOWN' else f"✅ {d.name} UP!"
                             send_telegram(msg)
@@ -180,57 +190,43 @@ def task_monitor():
                             db.session.commit()
                             last_status_map[d.id] = status
 
-                        # Simpan History Ping ke DB (Hanya kalau UP, biar grafik bagus)
                         if status == 'UP':
                             db.session.add(PingHistory(device_id=d.id, latency=lat_val))
                             db.session.commit()
                             
                         results.append({'id': d.id, 'status': status, 'latency': lat_txt, 'color': color})
-                    
-                    except Exception as e:
-                        # Jangan print error tiap detik biar terminal bersih
+                    except:
                         results.append({'id': d.id, 'status': 'ERR', 'latency': 'Err', 'color': 'secondary'})
 
-                # Kirim data ke Frontend
                 socketio.emit('update_monitor', results)
-            
             except Exception as e:
                 print(f"Error in Monitor Loop: {e}")
+        time.sleep(3)
 
-        time.sleep(3) # Cek setiap 3 detik
-
+# ==========================================
+# DUMMY SPEEDTEST (HEMAT KUOTA & CEPAT)
+# ==========================================
 def task_speedtest():
     global latest_speed
-    print("⏳ Speedtest Standby (Waiting 10s)...")
-    time.sleep(10) # [PENTING] Jeda 10 detik biar Dashboard muncul duluan!
+    print("⚠️ SPEEDTEST: DUMMY MODE ACTIVE (Simulated Data Only)")
     
     while True:
-        try:
-            print("🚀 Running Speedtest...")
-            st = speedtest.Speedtest()
-            st.get_best_server()
-            
-            dl = round(st.download()/1e6, 2)
-            ul = round(st.upload()/1e6, 2)
-            png = int(st.results.ping)
-            
-            latest_speed = {'dl': dl, 'ul': ul, 'ping': png}
-            socketio.emit('update_speed', latest_speed)
-            print(f"✅ Speedtest Done: {dl} Mbps")
-            
-            time.sleep(900) # 15 Menit sekali
-        except Exception as e:
-            print(f"⚠️ Speedtest Error (Skip): {e}")
-            latest_speed = {'dl': 'Err', 'ul': 'Err', 'ping': 'Err'}
-            socketio.emit('update_speed', latest_speed)
-            time.sleep(60) # Coba lagi 1 menit kemudian kalau gagal
+        # Generate angka acak biar terlihat seperti real-time
+        # Range angkanya bisa diatur suka-suka Masbro
+        dl_fake = random.randint(30, 80)  # Pura-pura Download 30-80 Mbps
+        ul_fake = random.randint(10, 25)  # Pura-pura Upload 10-25 Mbps
+        ping_fake = random.randint(9, 25) # Pura-pura Ping 9-25 ms
+        
+        latest_speed = {'dl': dl_fake, 'ul': ul_fake, 'ping': ping_fake}
+        
+        # Kirim ke Dashboard
+        socketio.emit('update_speed', latest_speed)
+        
+        # Update setiap 5 detik (Biar grafik di dashboard gerak terus)
+        time.sleep(5)
 
 if __name__ == '__main__':
-    # Start Background Threads
     socketio.start_background_task(task_monitor)
     socketio.start_background_task(task_speedtest)
-    
-    print("🔥 NetWatch ULTIMATE (Secure DB Version) Running on Port 5000...")
-    
-    # [PENTING] Debug=False WAJIB biar gak restart loop & error refused
+    print("🔥 NetWatch ULTIMATE (Dummy Mode) Running on Port 5000...")
     socketio.run(app, host='0.0.0.0', port=5000, debug=False, allow_unsafe_werkzeug=True)
